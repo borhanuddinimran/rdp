@@ -248,6 +248,48 @@ jobs:
           
           Add-Content -Path $env:GITHUB_ENV -Value "TOTAL_MINUTES=$totalMinutes"
 
+      # SEND NOTIFICATION TO TELEGRAM
+      - name: 📱 SEND CONNECTION INFO TO TELEGRAM
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          Write-Host ""
+          Write-Host "📱 SENDING CONNECTION INFO TO TELEGRAM" -ForegroundColor Yellow
+          if ($env:TELEGRAM_BOT_TOKEN -and $env:TELEGRAM_CHAT_ID) {
+            $msgLines = @(
+              "🚀 *RDP Server is Ready!*",
+              "",
+              "🌐 *Tailscale IP:* ``$($env:TAILSCALE_IP)``",
+              "👤 *Username:* ``Administrator``",
+              "🔑 *Password:* ``Catizen@``",
+              "📍 *Port:* ``3389``",
+              "⏱️ *Duration:* ${{ github.event.inputs.duration || '5h40m' }}",
+              "",
+              "💡 *Remote Desktop Connection:*",
+              "``$($env:TAILSCALE_IP):3389``"
+            )
+            $msg = $msgLines -join "`n"
+
+            $payload = @{
+              chat_id    = $env:TELEGRAM_CHAT_ID
+              text       = $msg
+              parse_mode = "Markdown"
+            } | ConvertTo-Json
+
+            try {
+              $response = Invoke-RestMethod -Uri "https://api.telegram.org/bot$($env:TELEGRAM_BOT_TOKEN)/sendMessage" `
+                                            -Method Post `
+                                            -ContentType "application/json; charset=utf-8" `
+                                            -Body ([System.Text.Encoding]::UTF8.GetBytes($payload))
+              Write-Host "✅ Telegram alert sent successfully!" -ForegroundColor Green
+            } catch {
+              Write-Host "⚠️ Failed to send Telegram alert: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+          } else {
+            Write-Host "ℹ️ Skipping Telegram alert: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID secret is not set." -ForegroundColor Gray
+          }
+
       # MAINTAIN SESSION
       - name: ⏳ MAINTAIN SESSION KEEPALIVE
         run: |
